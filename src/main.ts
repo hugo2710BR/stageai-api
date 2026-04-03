@@ -6,6 +6,8 @@ import { AppModule } from "./app.module";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.use(require('express').json({ limit: '15mb' }));
+
   app.setGlobalPrefix("api");
 
   app.enableCors({
