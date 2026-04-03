@@ -22,7 +22,7 @@ model Staging {
   id        String   @id @default(uuid())
   style     String
   prompt    String?
-  imageUrl  String
+  imageUrl  String?
   resultUrl String?
   status    String   @default("pending")
   createdAt DateTime @default(now())
