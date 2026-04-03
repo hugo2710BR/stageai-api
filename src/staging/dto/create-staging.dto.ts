@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from "class-validator";
+import { IsString, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateStagingDto {
   @IsString()
@@ -13,4 +13,12 @@ export class CreateStagingDto {
   @IsString()
   @IsOptional()
   prompt?: string;
+
+  @IsNumber()
+  @IsOptional()
+  width?: number;
+
+  @IsNumber()
+  @IsOptional()
+  height?: number;
 }

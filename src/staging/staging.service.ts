@@ -17,6 +17,10 @@ const STYLE_PROMPTS: Record<string, string> = {
 const NEGATIVE_PROMPT =
   'blurry, low quality, distorted, unrealistic, cartoon, painting, watermark, text';
 
+function snapTo64(value: number): number {
+  return Math.min(1024, Math.max(64, Math.round(value / 64) * 64));
+}
+
 @Injectable()
 export class StagingService {
   constructor(private prisma: PrismaService) {}
@@ -53,11 +57,14 @@ export class StagingService {
             num_inference_steps: 25,
             guidance_scale: 7.5,
             scheduler: 'DPMSolverMultistep',
+            width: dto.width ? snapTo64(dto.width) : 512,
+            height: dto.height ? snapTo64(dto.height) : 512,
           },
         },
       );
 
-      const resultUrl = (Array.isArray(output) ? output[0] : output) as string;
+      const raw = Array.isArray(output) ? output[0] : output;
+      const resultUrl = String(raw);
 
       await this.prisma.staging.update({
         where: { id: staging.id },
