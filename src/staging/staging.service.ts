@@ -15,12 +15,6 @@ const STYLE_PROMPTS: Record<string, string> = {
     'mediterranean interior design, warm terracotta tones, natural textures, arched details, bright airy space',
 };
 
-const NEGATIVE_PROMPT =
-  'blurry, low quality, distorted, unrealistic, cartoon, painting, watermark, text';
-
-function snapTo64(value: number): number {
-  return Math.min(1024, Math.max(64, Math.round(value / 64) * 64));
-}
 
 @Injectable()
 export class StagingService {
@@ -47,22 +41,21 @@ export class StagingService {
 
       const stylePrompt = STYLE_PROMPTS[dto.style] || STYLE_PROMPTS['Moderno'];
       const fullPrompt = dto.prompt
-        ? `${stylePrompt}, ${dto.prompt}`
+        ? `${dto.prompt}, ${stylePrompt}`
         : stylePrompt;
 
       const output = await replicate.run(
-        'stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd68b3',
+        'black-forest-labs/flux-fill-pro',
         {
           input: {
             image: dto.image,
             mask: dto.mask,
             prompt: fullPrompt,
-            negative_prompt: NEGATIVE_PROMPT,
-            num_inference_steps: 25,
-            guidance_scale: 7.5,
-            scheduler: 'DPMSolverMultistep',
-            width: dto.width ? snapTo64(dto.width) : 512,
-            height: dto.height ? snapTo64(dto.height) : 512,
+            steps: 50,
+            guidance: 30,
+            output_format: 'jpg',
+            output_quality: 90,
+            safety_tolerance: 2,
           },
         },
       );
