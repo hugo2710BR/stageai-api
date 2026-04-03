@@ -94,4 +94,19 @@ export class StagingService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async remove(userId: string, stagingId: string) {
+    const staging = await this.prisma.staging.findFirst({
+      where: { id: stagingId, userId },
+    });
+
+    if (!staging) throw new Error('Staging não encontrado');
+
+    if (staging.resultUrl) {
+      const key = staging.resultUrl.split('/').slice(-2).join('/');
+      await this.r2.deleteObject(key);
+    }
+
+    await this.prisma.staging.delete({ where: { id: stagingId } });
+  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { StagingService } from "./staging.service";
 import { CreateStagingDto } from "./dto/create-staging.dto";
@@ -20,5 +20,10 @@ export class StagingController {
   @Get()
   findAll(@Req() req: AuthRequest) {
     return this.stagingService.findAllByUser(req.user.id);
+  }
+
+  @Delete(':id')
+  remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.stagingService.remove(req.user.id, id);
   }
 }

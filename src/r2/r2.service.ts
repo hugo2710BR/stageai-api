@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 
 @Injectable()
@@ -38,5 +39,14 @@ export class R2Service {
     );
 
     return `${this.publicUrl}/${key}`;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
   }
 }
