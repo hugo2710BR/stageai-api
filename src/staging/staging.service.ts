@@ -90,7 +90,7 @@ export class StagingService {
 
   async findAllByUser(userId: string) {
     return this.prisma.staging.findMany({
-      where: { userId },
+      where: { userId, status: 'completed' },
       orderBy: { createdAt: 'desc' },
     });
   }
