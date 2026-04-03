@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import Replicate from 'replicate';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../r2/r2.service';
 import { CreateStagingDto } from './dto/create-staging.dto';
 
 const STYLE_PROMPTS: Record<string, string> = {
@@ -23,7 +24,10 @@ function snapTo64(value: number): number {
 
 @Injectable()
 export class StagingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private r2: R2Service,
+  ) {}
 
   async create(userId: string, dto: CreateStagingDto) {
     const staging = await this.prisma.staging.create({
@@ -31,7 +35,7 @@ export class StagingService {
         userId,
         style: dto.style,
         prompt: dto.prompt,
-        imageUrl: dto.image.substring(0, 100),
+        imageUrl: null,
         status: 'processing',
       },
     });
@@ -64,14 +68,17 @@ export class StagingService {
       );
 
       const raw = Array.isArray(output) ? output[0] : output;
-      const resultUrl = String(raw);
+      const replicateUrl = String(raw);
+
+      const r2Key = `stagings/${staging.id}.png`;
+      const permanentUrl = await this.r2.uploadFromUrl(replicateUrl, r2Key);
 
       await this.prisma.staging.update({
         where: { id: staging.id },
-        data: { resultUrl: resultUrl, status: 'completed' },
+        data: { resultUrl: permanentUrl, status: 'completed' },
       });
 
-      return { result: resultUrl };
+      return { result: permanentUrl };
     } catch (error) {
       await this.prisma.staging.update({
         where: { id: staging.id },
