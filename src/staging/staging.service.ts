@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import Replicate from 'replicate';
+// import Replicate from 'replicate'; // fallback — manter até Fal validado em prod
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
+import { FalService } from '../fal/fal.service';
 import { CreateStagingDto } from './dto/create-staging.dto';
 
 const STYLE_PROMPTS: Record<string, string> = {
@@ -21,6 +22,7 @@ export class StagingService {
   constructor(
     private prisma: PrismaService,
     private r2: R2Service,
+    private fal: FalService,
   ) {}
 
   async create(userId: string, dto: CreateStagingDto) {
@@ -35,33 +37,20 @@ export class StagingService {
     });
 
     try {
-      const replicate = new Replicate({
-        auth: process.env.REPLICATE_API_TOKEN,
-      });
-
       const stylePrompt = STYLE_PROMPTS[dto.style] || STYLE_PROMPTS['Moderno'];
       const fullPrompt = dto.prompt
         ? `${dto.prompt}, ${stylePrompt}`
         : stylePrompt;
 
-      const output = await replicate.run(
-        'black-forest-labs/flux-fill-pro',
-        {
-          input: {
-            image: dto.image,
-            mask: dto.mask,
-            prompt: fullPrompt,
-            steps: 50,
-            guidance: 30,
-            output_format: 'jpg',
-            output_quality: 90,
-            safety_tolerance: 2,
-          },
-        },
-      );
+      // --- Replicate (fallback) ---
+      // const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+      // const output = await replicate.run('black-forest-labs/flux-fill-pro', {
+      //   input: { image: dto.image, mask: dto.mask, prompt: fullPrompt, steps: 50, guidance: 30, output_format: 'jpg', output_quality: 90, safety_tolerance: 2 },
+      // });
+      // const replicateUrl = String(Array.isArray(output) ? output[0] : output);
 
-      const raw = Array.isArray(output) ? output[0] : output;
-      const replicateUrl = String(raw);
+      // --- Fal AI ---
+      const replicateUrl = await this.fal.inpaint(dto.image, dto.mask, fullPrompt);
 
       const r2Key = `stagings/${staging.id}.png`;
       const permanentUrl = await this.r2.uploadFromUrl(replicateUrl, r2Key);
