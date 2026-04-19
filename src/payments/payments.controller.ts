@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Headers,
   Post,
@@ -32,10 +31,10 @@ export class PaymentsController {
 
   @Post('webhook')
   async webhook(
-    @Body() payload: Record<string, unknown>,
+    @Req() req: Request & { rawBody: Buffer },
     @Headers('x-signature') signature: string,
   ) {
-    await this.paymentsService.handleWebhook(payload, signature);
+    await this.paymentsService.handleWebhook(req.rawBody, signature);
     return { received: true };
   }
 }
