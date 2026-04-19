@@ -1,29 +1,52 @@
-# Staging Module
+# staging
 
-## Responsabilidade
-Proxy para a Replicate API e gestao do historico de stagings por utilizador.
+## Objetivo
+Módulo principal de negócio — orquestra geração de imagens via Fal AI, armazenamento no R2, histórico e rate limiting por plano.
 
 ## Ficheiros
-- `staging.module.ts` — Regista controller e service
-- `staging.controller.ts` — POST /staging (criar) e GET /staging (listar). Ambas protegidas por JwtAuthGuard
-- `staging.service.ts` — Envia imagem + mascara ao Replicate, guarda resultado na DB
-- `dto/create-staging.dto.ts` — Valida image, mask, style (obrigatorios) e prompt (opcional)
+| Ficheiro | Responsabilidade |
+|---|---|
+| `staging.module.ts` | Regista controller, service, importa `FalModule` e `R2Module` |
+| `staging.controller.ts` | Rotas HTTP — todas protegidas por `JwtAuthGuard` |
+| `staging.service.ts` | Lógica de negócio — limites, geração, persistência |
+| `dto/create-staging.dto.ts` | Valida body do POST /staging |
 
-## Fluxo de criacao
-1. Request autenticado chega com image (base64), mask (base64), style, prompt, width, height
-2. Service cria registo na DB com status "processing"
-3. width e height sao normalizados para multiplo de 64 (snapTo64) — Replicate so aceita esses valores
-4. Envia ao Replicate com o style prompt composto
-5. Se sucesso: atualiza registo com resultUrl e status "completed"
-6. Se erro: atualiza status para "failed" e relanca o erro
+## Endpoints
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/staging` | Cria um novo staging (verifica limite → gera → persiste) |
+| `GET` | `/staging/usage` | Devolve `{ plan, used, limit, remaining }` do mês corrente |
+| `GET` | `/staging` | Lista stagings com `status = 'completed'` e `deletedAt = null`, ordenados por data desc |
+| `DELETE` | `/staging/:id` | Soft delete — apaga ficheiro do R2, marca `deletedAt` no Postgres |
 
-## Estilos disponiveis
-- Moderno, Escandinavo, Industrial, Mediterraneo
-- Cada estilo tem um prompt base que e concatenado com o prompt livre do user
+## Fluxo de criação (POST /staging)
+1. Busca `user.plan` na DB
+2. `checkLimit()` — busca limite na tabela `Plan`; conta stagings do mês (incluindo soft-deleted); lança 429 se atingido
+3. Cria registo com `status: 'processing'`
+4. Chama `FalService.inpaint(image, mask, prompt)` → URL temporária
+5. Chama `R2Service.uploadFromUrl(url, key)` → URL permanente no R2
+6. Actualiza registo com `resultUrl` e `status: 'completed'`
+7. Em caso de erro: actualiza para `status: 'failed'` e relança a excepção
 
-## Regras
-- Todas as rotas requerem JWT (UseGuards no controller)
-- O REPLICATE_API_TOKEN vive apenas no .env do backend
-- O imageUrl guardado na DB e truncado (primeiros 100 chars) para nao guardar base64 inteiro
-- Negative prompt sempre incluido para evitar resultados de baixa qualidade
-- width e height sao opcionais no DTO — default 512x512 se nao enviados
+## Soft delete (DELETE /staging/:id)
+- Apaga o ficheiro do R2 (para não ocupar espaço)
+- Marca `deletedAt = now()` no registo Postgres — **não apaga o registo**
+- O registo continua a contar para o limite mensal do utilizador
+- O histórico (`GET /staging`) filtra por `deletedAt: null`
+
+## Limites por plano
+Os limites são lidos da tabela `Plan` no Postgres via `prisma.plan.findUnique({ where: { name: planName } })`.
+Não existe `PLAN_LIMITS` hardcoded — alterar limites no Prisma Studio ou via seed.
+
+| Plano | Gerações/mês |
+|---|---|
+| free | 3 |
+| starter | 30 |
+| pro | 100 |
+| agency | Ilimitado (limit = null) |
+
+## Requisitos
+- Todas as rotas requerem JWT — `@UseGuards(JwtAuthGuard)` aplicado ao nível do controller
+- O `userId` vem sempre de `req.user.id` (injectado pelo JwtStrategy) — nunca do body
+- A key R2 segue o padrão `stagings/<stagingId>.png`
+- Limites vêm sempre da tabela `Plan` — nunca hardcoded

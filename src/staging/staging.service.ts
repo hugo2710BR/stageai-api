@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 // import Replicate from 'replicate'; // fallback — manter até Fal validado em prod
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
@@ -16,7 +16,6 @@ const STYLE_PROMPTS: Record<string, string> = {
     'mediterranean interior design, warm terracotta tones, natural textures, arched details, bright airy space',
 };
 
-
 @Injectable()
 export class StagingService {
   constructor(
@@ -25,7 +24,35 @@ export class StagingService {
     private fal: FalService,
   ) {}
 
+  private async getPlanLimit(planName: string): Promise<number | null> {
+    const plan = await this.prisma.plan.findUnique({ where: { name: planName } });
+    return plan?.limit ?? 3;
+  }
+
+  private async checkLimit(userId: string, planName: string): Promise<void> {
+    const limit = await this.getPlanLimit(planName);
+    if (limit === null) return;
+
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+
+    const count = await this.prisma.staging.count({
+      where: { userId, createdAt: { gte: start } },
+    });
+
+    if (count >= limit) {
+      throw new HttpException(
+        `Limite de ${limit} gerações/mês atingido.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
   async create(userId: string, dto: CreateStagingDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    await this.checkLimit(userId, user!.plan);
+
     const staging = await this.prisma.staging.create({
       data: {
         userId,
@@ -42,18 +69,10 @@ export class StagingService {
         ? `${dto.prompt}, ${stylePrompt}`
         : stylePrompt;
 
-      // --- Replicate (fallback) ---
-      // const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
-      // const output = await replicate.run('black-forest-labs/flux-fill-pro', {
-      //   input: { image: dto.image, mask: dto.mask, prompt: fullPrompt, steps: 50, guidance: 30, output_format: 'jpg', output_quality: 90, safety_tolerance: 2 },
-      // });
-      // const replicateUrl = String(Array.isArray(output) ? output[0] : output);
-
-      // --- Fal AI ---
-      const replicateUrl = await this.fal.inpaint(dto.image, dto.mask, fullPrompt);
+      const falUrl = await this.fal.inpaint(dto.image, dto.mask, fullPrompt);
 
       const r2Key = `stagings/${staging.id}.png`;
-      const permanentUrl = await this.r2.uploadFromUrl(replicateUrl, r2Key);
+      const permanentUrl = await this.r2.uploadFromUrl(falUrl, r2Key);
 
       await this.prisma.staging.update({
         where: { id: staging.id },
@@ -70,25 +89,49 @@ export class StagingService {
     }
   }
 
+  async getUsage(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const planName = user!.plan;
+    const limit = await this.getPlanLimit(planName);
+
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+
+    const used = await this.prisma.staging.count({
+      where: { userId, createdAt: { gte: start } },
+    });
+
+    return {
+      plan: planName,
+      used,
+      limit,
+      remaining: limit === null ? null : Math.max(0, limit - used),
+    };
+  }
+
   async findAllByUser(userId: string) {
     return this.prisma.staging.findMany({
-      where: { userId, status: 'completed' },
+      where: { userId, status: 'completed', deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async remove(userId: string, stagingId: string) {
     const staging = await this.prisma.staging.findFirst({
-      where: { id: stagingId, userId },
+      where: { id: stagingId, userId, deletedAt: null },
     });
 
-    if (!staging) throw new Error('Staging não encontrado');
+    if (!staging) throw new HttpException('Staging não encontrado', HttpStatus.NOT_FOUND);
 
     if (staging.resultUrl) {
       const key = staging.resultUrl.split('/').slice(-2).join('/');
       await this.r2.deleteObject(key);
     }
 
-    await this.prisma.staging.delete({ where: { id: stagingId } });
+    await this.prisma.staging.update({
+      where: { id: stagingId },
+      data: { deletedAt: new Date() },
+    });
   }
 }
