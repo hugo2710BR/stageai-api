@@ -38,20 +38,18 @@ export class PaymentsService {
     return url;
   }
 
-  async handleWebhook(
-    payload: Record<string, unknown>,
-    signature: string,
-  ): Promise<void> {
+  async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
     const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET!;
     const hmac = crypto
       .createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
+      .update(rawBody)
       .digest('hex');
 
     if (hmac !== signature) {
       throw new BadRequestException('Assinatura inválida');
     }
 
+    const payload = JSON.parse(rawBody.toString()) as Record<string, unknown>;
     const meta = payload.meta as Record<string, unknown> | undefined;
     const eventName = meta?.event_name;
     if (eventName !== 'order_created') return;
