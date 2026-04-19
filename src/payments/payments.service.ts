@@ -74,7 +74,7 @@ export class PaymentsService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { plan: plan.name },
+      data: { plan: plan.name, planUpgradedAt: new Date() },
     });
   }
 }
