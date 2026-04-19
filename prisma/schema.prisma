@@ -30,7 +30,7 @@ model Plan {
   highlighted   Boolean  @default(false)
   active        Boolean  @default(true)
   sortOrder     Int      @default(0)
-  stripePriceId String?
+  lsVariantId   String?
 }
 
 model Staging {

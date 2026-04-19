@@ -20,6 +20,7 @@ const plans = [
     features: ['30 imagens por mês', 'Todos os estilos', 'Download em alta qualidade', 'Histórico completo'],
     highlighted: false,
     sortOrder: 1,
+    lsVariantId: '1549528',
   },
   {
     name: 'pro',
@@ -29,6 +30,7 @@ const plans = [
     features: ['100 imagens por mês', 'Todos os estilos', 'Download em alta qualidade', 'Histórico completo', 'Suporte prioritário'],
     highlighted: true,
     sortOrder: 2,
+    lsVariantId: '1549619',
   },
   {
     name: 'agency',
