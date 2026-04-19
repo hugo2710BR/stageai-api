@@ -17,6 +17,11 @@ export class StagingController {
     return this.stagingService.create(req.user.id, dto);
   }
 
+  @Get('usage')
+  getUsage(@Req() req: AuthRequest) {
+    return this.stagingService.getUsage(req.user.id);
+  }
+
   @Get()
   findAll(@Req() req: AuthRequest) {
     return this.stagingService.findAllByUser(req.user.id);
