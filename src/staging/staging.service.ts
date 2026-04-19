@@ -94,12 +94,17 @@ export class StagingService {
     const planName = user!.plan;
     const limit = await this.getPlanLimit(planName);
 
-    const start = new Date();
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const start =
+      user!.planUpgradedAt && user!.planUpgradedAt > monthStart
+        ? user!.planUpgradedAt
+        : monthStart;
 
     const used = await this.prisma.staging.count({
-      where: { userId, createdAt: { gte: start } },
+      where: { userId, deletedAt: null, createdAt: { gte: start } },
     });
 
     return {
