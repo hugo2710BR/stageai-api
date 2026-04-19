@@ -5,13 +5,6 @@ import { R2Service } from '../r2/r2.service';
 import { FalService } from '../fal/fal.service';
 import { CreateStagingDto } from './dto/create-staging.dto';
 
-const PLAN_LIMITS: Record<string, number> = {
-  free: 3,
-  starter: 30,
-  pro: 100,
-  agency: Infinity,
-};
-
 const STYLE_PROMPTS: Record<string, string> = {
   Moderno:
     'modern interior design, clean lines, neutral tones, contemporary furniture, minimalist decor',
@@ -31,9 +24,14 @@ export class StagingService {
     private fal: FalService,
   ) {}
 
-  private async checkLimit(userId: string, plan: string): Promise<void> {
-    const limit = PLAN_LIMITS[plan] ?? 3;
-    if (limit === Infinity) return;
+  private async getPlanLimit(planName: string): Promise<number | null> {
+    const plan = await this.prisma.plan.findUnique({ where: { name: planName } });
+    return plan?.limit ?? 3;
+  }
+
+  private async checkLimit(userId: string, planName: string): Promise<void> {
+    const limit = await this.getPlanLimit(planName);
+    if (limit === null) return;
 
     const start = new Date();
     start.setDate(1);
@@ -93,8 +91,8 @@ export class StagingService {
 
   async getUsage(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const plan = user!.plan;
-    const limit = PLAN_LIMITS[plan] ?? 3;
+    const planName = user!.plan;
+    const limit = await this.getPlanLimit(planName);
 
     const start = new Date();
     start.setDate(1);
@@ -105,32 +103,35 @@ export class StagingService {
     });
 
     return {
-      plan,
+      plan: planName,
       used,
-      limit: limit === Infinity ? null : limit,
-      remaining: limit === Infinity ? null : Math.max(0, limit - used),
+      limit,
+      remaining: limit === null ? null : Math.max(0, limit - used),
     };
   }
 
   async findAllByUser(userId: string) {
     return this.prisma.staging.findMany({
-      where: { userId, status: 'completed' },
+      where: { userId, status: 'completed', deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async remove(userId: string, stagingId: string) {
     const staging = await this.prisma.staging.findFirst({
-      where: { id: stagingId, userId },
+      where: { id: stagingId, userId, deletedAt: null },
     });
 
-    if (!staging) throw new Error('Staging não encontrado');
+    if (!staging) throw new HttpException('Staging não encontrado', HttpStatus.NOT_FOUND);
 
     if (staging.resultUrl) {
       const key = staging.resultUrl.split('/').slice(-2).join('/');
       await this.r2.deleteObject(key);
     }
 
-    await this.prisma.staging.delete({ where: { id: stagingId } });
+    await this.prisma.staging.update({
+      where: { id: stagingId },
+      data: { deletedAt: new Date() },
+    });
   }
 }

@@ -19,14 +19,29 @@ model User {
   stagings Staging[]
 }
 
+model Plan {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  displayName   String
+  price         Float
+  currency      String   @default("EUR")
+  limit         Int?
+  features      String[]
+  highlighted   Boolean  @default(false)
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  stripePriceId String?
+}
+
 model Staging {
   id        String   @id @default(uuid())
   style     String
   prompt    String?
   imageUrl  String?
   resultUrl String?
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
+  status    String    @default("pending")
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
 
   user   User   @relation(fields: [userId], references: [id])
   userId String

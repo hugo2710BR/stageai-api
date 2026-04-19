@@ -14,7 +14,7 @@ Wrapper sobre o `@aws-sdk/client-s3` para armazenamento permanente de imagens no
 ### `uploadFromUrl(imageUrl, key): Promise<string>`
 1. Faz fetch da URL temporária devolvida pelo Fal
 2. Converte response para `Buffer`
-3. Faz `PutObjectCommand` com `ContentType: 'image/png'`
+3. Faz `PutObjectCommand` com `ContentType: 'image/jpeg'`
 4. Devolve URL pública: `${R2_PUBLIC_URL}/${key}`
 
 ### `deleteObject(key): Promise<void>`
@@ -31,5 +31,6 @@ R2_SECRET_ACCESS_KEY=...
 
 ## Requisitos
 - As keys seguem o padrão `stagings/<stagingId>.png`
+- O Fal devolve imagens em JPEG (`output_format: 'jpeg'`) — `ContentType` deve ser `image/jpeg`
 - Ao apagar um staging, o `StagingService` extrai a key da `resultUrl` antes de chamar `deleteObject`
 - Credenciais nunca expostas no frontend — vivem apenas no `.env` do backend
