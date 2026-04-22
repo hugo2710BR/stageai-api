@@ -22,4 +22,8 @@ export class CreateStagingDto {
   @IsNumber()
   @IsOptional()
   height?: number;
+
+  @IsNumber()
+  @IsOptional()
+  seed?: number;
 }

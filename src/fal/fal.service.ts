@@ -7,13 +7,14 @@ export class FalService {
     fal.config({ credentials: process.env.FAL_KEY });
   }
 
-  async generate(prompt: string): Promise<string> {
+  async generate(prompt: string, seed?: number): Promise<string> {
     const result = await fal.subscribe('fal-ai/flux/schnell', {
       input: {
         prompt,
         image_size: 'landscape_4_3',
         num_inference_steps: 4,
         output_format: 'jpeg',
+        ...(seed !== undefined && { seed }),
       },
     });
 
@@ -28,6 +29,7 @@ export class FalService {
     imageBase64: string,
     maskBase64: string,
     prompt: string,
+    seed?: number,
   ): Promise<string> {
     const imageBuffer = this.base64ToBuffer(imageBase64);
     const maskBuffer = this.base64ToBuffer(maskBase64);
@@ -47,6 +49,7 @@ export class FalService {
         prompt,
         safety_tolerance: '2' as const,
         output_format: 'jpeg',
+        ...(seed !== undefined && { seed }),
       },
     });
 
