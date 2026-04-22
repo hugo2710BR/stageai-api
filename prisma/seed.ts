@@ -8,8 +8,9 @@ const plans = [
     displayName: 'Free',
     price: 0,
     limit: 3,
-    features: ['3 imagens por mês', 'Todos os estilos', 'Download em alta qualidade'],
+    features: ['3 imagens de trial', 'Todos os estilos', 'Download em alta qualidade'],
     highlighted: false,
+    active: false,
     sortOrder: 0,
   },
   {

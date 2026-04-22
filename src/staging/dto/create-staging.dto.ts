@@ -5,7 +5,8 @@ export class CreateStagingDto {
   image: string;
 
   @IsString()
-  mask: string;
+  @IsOptional()
+  mask?: string;
 
   @IsString()
   style: string;

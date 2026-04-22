@@ -38,7 +38,7 @@ export class StagingService {
     start.setHours(0, 0, 0, 0);
 
     const count = await this.prisma.staging.count({
-      where: { userId, createdAt: { gte: start } },
+      where: { userId, createdAt: { gte: start }, status: { not: 'failed' } },
     });
 
     if (count >= limit) {
@@ -69,9 +69,12 @@ export class StagingService {
         ? `${dto.prompt}, ${stylePrompt}`
         : stylePrompt;
 
-      const falUrl = await this.fal.inpaint(dto.image, dto.mask, fullPrompt);
+      const isFree = user!.plan === 'free';
+      const falUrl = isFree
+        ? await this.fal.generate(fullPrompt, dto.seed)
+        : await this.fal.inpaint(dto.image, dto.mask!, fullPrompt, dto.seed);
 
-      const r2Key = `stagings/${staging.id}.png`;
+      const r2Key = `stagings/${staging.id}.jpg`;
       const permanentUrl = await this.r2.uploadFromUrl(falUrl, r2Key);
 
       await this.prisma.staging.update({
@@ -104,7 +107,7 @@ export class StagingService {
         : monthStart;
 
     const used = await this.prisma.staging.count({
-      where: { userId, deletedAt: null, createdAt: { gte: start } },
+      where: { userId, createdAt: { gte: start }, status: { not: 'failed' } },
     });
 
     return {

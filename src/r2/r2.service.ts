@@ -34,7 +34,7 @@ export class R2Service {
         Bucket: this.bucket,
         Key: key,
         Body: buffer,
-        ContentType: 'image/png',
+        ContentType: 'image/jpeg',
       }),
     );
 

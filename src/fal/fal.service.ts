@@ -7,6 +7,23 @@ export class FalService {
     fal.config({ credentials: process.env.FAL_KEY });
   }
 
+  async generate(prompt: string): Promise<string> {
+    const result = await fal.subscribe('fal-ai/flux/schnell', {
+      input: {
+        prompt,
+        image_size: 'landscape_4_3',
+        num_inference_steps: 4,
+        output_format: 'jpeg',
+      },
+    });
+
+    const images = (result.data as { images: { url: string }[] }).images;
+    if (!images || images.length === 0) {
+      throw new Error('Fal returned no images');
+    }
+    return images[0].url;
+  }
+
   async inpaint(
     imageBase64: string,
     maskBase64: string,
