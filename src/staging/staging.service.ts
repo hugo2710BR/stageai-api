@@ -38,7 +38,7 @@ export class StagingService {
     start.setHours(0, 0, 0, 0);
 
     const count = await this.prisma.staging.count({
-      where: { userId, createdAt: { gte: start } },
+      where: { userId, createdAt: { gte: start }, status: { not: 'failed' } },
     });
 
     if (count >= limit) {
@@ -107,7 +107,7 @@ export class StagingService {
         : monthStart;
 
     const used = await this.prisma.staging.count({
-      where: { userId, deletedAt: null, createdAt: { gte: start } },
+      where: { userId, createdAt: { gte: start }, status: { not: 'failed' } },
     });
 
     return {
