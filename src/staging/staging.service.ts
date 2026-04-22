@@ -71,10 +71,10 @@ export class StagingService {
 
       const isFree = user!.plan === 'free';
       const falUrl = isFree
-        ? await this.fal.generate(fullPrompt)
-        : await this.fal.inpaint(dto.image, dto.mask!, fullPrompt);
+        ? await this.fal.generate(fullPrompt, dto.seed)
+        : await this.fal.inpaint(dto.image, dto.mask!, fullPrompt, dto.seed);
 
-      const r2Key = `stagings/${staging.id}.png`;
+      const r2Key = `stagings/${staging.id}.jpg`;
       const permanentUrl = await this.r2.uploadFromUrl(falUrl, r2Key);
 
       await this.prisma.staging.update({
