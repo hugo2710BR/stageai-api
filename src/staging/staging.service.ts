@@ -69,7 +69,10 @@ export class StagingService {
         ? `${dto.prompt}, ${stylePrompt}`
         : stylePrompt;
 
-      const falUrl = await this.fal.inpaint(dto.image, dto.mask, fullPrompt);
+      const isFree = user!.plan === 'free';
+      const falUrl = isFree
+        ? await this.fal.generate(fullPrompt)
+        : await this.fal.inpaint(dto.image, dto.mask!, fullPrompt);
 
       const r2Key = `stagings/${staging.id}.png`;
       const permanentUrl = await this.r2.uploadFromUrl(falUrl, r2Key);

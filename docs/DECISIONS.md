@@ -1,7 +1,6 @@
 # StageAI API — Decision Log
 
-> Ultima atualizacao: 2026-04-18
-> Decisoes tecnicas relevantes para o backend.
+> Ultima atualizacao: 2026-04-22
 
 ---
 
@@ -10,17 +9,15 @@
 **Data:** 2026-04
 **Estado:** Implementado e em producao
 
-**Decisao:** Usar Fal AI com modelo `fal-ai/flux-pro/v1/fill` para inpainting.
+**Decisao:** Usar Fal AI com modelo `fal-ai/flux-pro/v1/fill` para inpainting (planos pagos).
 
 **Implementacao:**
-- `src/fal/fal.service.ts` — converte base64 → upload para Fal storage → chama modelo
-- Replicate mantido como fallback comentado em `staging.service.ts`
+- `src/fal/fal.service.ts` — converte base64 → upload Fal storage → chama modelo
 - Custo: $0.05 por geracao
 
 **Porque Fal e nao Replicate:**
 - Melhor qualidade de resultados
 - API mais simples (upload + call)
-- Velocidade de geracao competitiva
 
 ---
 
@@ -34,7 +31,7 @@
 **Implementacao:**
 - `src/r2/r2.service.ts` — S3Client compativel com R2
 - Fluxo: Fal gera URL temporaria → R2 faz fetch → upload com key `stagings/{id}.png`
-- Delete remove do R2 + DB
+- ContentType: `image/jpeg` (Fal devolve JPEG)
 
 **Custos:** $0.015/GB/mes, egress gratis.
 
@@ -45,64 +42,84 @@
 **Data:** 2026-03
 **Estado:** Implementado
 
-**Decisao:** Usar Prisma v6 em vez de v7.
+**Decisao:** Usar Prisma v6. Comando sempre com `npx prisma@6`.
 
-**Porque:** Prisma v7 gera codigo ESM que conflita com o build CommonJS do NestJS. Incompatibilidade ESM/CJS causava erro `exports is not defined`. Prisma v6 funciona sem problemas.
-
-**Comando:** Usar sempre `npx prisma@6` para garantir versao correta.
+**Porque:** Prisma v7 gera codigo ESM que conflita com build CommonJS do NestJS.
 
 ---
 
-## DEC-004: Monetizacao — Planos e limites
+## DEC-004: Monetizacao — Lemon Squeezy (nao Stripe)
 
 **Data:** 2026-04
-**Estado:** Planeado (FEAT-001 + FEAT-004)
+**Estado:** Implementado e em producao
+
+**Decisao:** Lemon Squeezy como plataforma de pagamentos. Stripe foi descartado.
+
+**Porque:**
+- Merchant of Record — trata VAT automaticamente (critico para Europa)
+- Plano futuro: migrar para Paddle
+
+**Implementacao:**
+- `src/payments/` — PaymentsModule
+- POST /payments/checkout — cria sessao LS, devolve URL
+- POST /payments/webhook — valida HMAC-SHA256 com raw body, atualiza User.plan + planUpgradedAt
+- CRITICO: validar webhook com raw body (nao JSON.stringify) — LS assina bytes exatos
 
 **Planos:**
-| Plano | Preco | Geracoes/mes |
+| Plano | Geracoes/mes | lsVariantId |
 |---|---|---|
-| Gratuito | €0 | 3 |
-| Starter | €12/mes | 30 |
-| Pro | €29/mes | 100 |
-| Agency | €79/mes | Ilimitado |
-
-**Pay-per-use:** 10 creditos por €6.
-
-**Implementacao planeada:**
-- Campo `plan` no User (enum string)
-- Contagem de geracoes via query com filtro `createdAt >= inicioDoMes`
-- Nao criar model Usage separado (complexidade desnecessaria)
-- Stripe Checkout para pagamentos
-- Webhooks para atualizar plano
+| free | 3 | — |
+| starter | 30 | 1549528 |
+| pro | 100 | 1549619 |
+| agency | Ilimitado | — |
 
 ---
 
-## DEC-005: Rate limiting como prioridade maxima
+## DEC-005: Rate limiting — sem model Usage separado
 
 **Data:** 2026-04
-**Estado:** Ativo
+**Estado:** Implementado
 
-**Decisao:** FEAT-001 deve ser implementada antes de qualquer outra feature.
+**Decisao:** Contar geracoes diretamente na tabela Staging com filtro `createdAt >= inicioDoMes`. Sem model Usage separado.
+
+**Adicional — planUpgradedAt:**
+- Ao fazer upgrade, `planUpgradedAt` e gravado no User
+- `getUsage` conta a partir de `max(inicioDoMes, planUpgradedAt)` — utilizador tem limite completo imediatamente apos upgrade
+
+**Soft delete:**
+- Apagar staging define `deletedAt`, nao remove registo
+- Registo continua a contar para o limite mensal — previne abuso
+
+---
+
+## DEC-006: tsconfig.build.json — excluir pastas .ts fora de src/
+
+**Data:** 2026-04
+**Estado:** Ativo — regra permanente
+
+**Decisao:** Qualquer pasta com ficheiros .ts fora de `src/` (ex: `prisma/`, `scripts/`) deve estar no `exclude` do `tsconfig.build.json`.
+
+**Porque:** `nest build` compila tudo o que nao esta excluido. Ficheiros fora de `src/` causam erro silencioso no Railway (`Cannot find module '/app/dist/main'`).
+
+**Estado atual do exclude:** `["node_modules", "test", "dist", "**/*spec.ts", "scripts", "prisma"]`
+
+---
+
+## DEC-007: Diferenciacao free vs pago — masking como feature paga
+
+**Data:** 2026-04
+**Estado:** Decisao tomada — implementacao futura (FEAT-NEW-001)
+
+**Decisao:** Plano free nao tem masking. Usa modelo mais barato (full-room generation). Starter+ usa `flux-pro/v1/fill` com inpainting preciso.
 
 **Racional:**
-- A $0.05/geracao, sem limite = risco financeiro real
-- 1000 users x 10 geracoes = $500/dia
-- E a unica feature que protege contra custo descontrolado
-- Deve estar pronta antes de promover o produto
+- O masking E o diferenciador do produto para profissionais
+- `flux-pro/v1/fill` e o unico modelo Fal com inpainting real — custo $0.05/geracao
+- Free users experimentam o resultado, pagam para ter controlo preciso
+- Justifica upgrade de forma tangivel e clara
 
----
+**Impacto no fluxo:**
+- Free: Upload → Estilo → Gerar (modelo flux/schnell ou similar, ~$0.003/geracao)
+- Starter+: Upload → Mascara → Estilo → Gerar (flux-pro/v1/fill, $0.05/geracao)
 
-## DEC-006: Infra — Railway + Vercel
-
-**Data:** 2026-04
-**Estado:** Em producao
-
-**Backend:** Railway (NestJS + PostgreSQL)
-- Monitorizar cold starts
-- Considerar plano pago se latencia subir
-
-**Frontend:** Vercel (Next.js)
-- Variavel `NEXT_PUBLIC_API_URL` aponta para URL do Railway
-
-**Base de dados:** PostgreSQL no Railway
-- Backup automatico incluido
+**Modelo free escolhido:** `fal-ai/flux/schnell` (~$0.003/geracao). Diferenca de qualidade clara vs flux-pro/v1/fill — argumento de upgrade forte e custo minimo no plano gratuito.
